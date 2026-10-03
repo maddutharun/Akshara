@@ -324,6 +324,7 @@ select throws_ok(
     )
   $$,
   '42501',
+  null,
   'users cannot assign a new highlight to another account'
 );
 
