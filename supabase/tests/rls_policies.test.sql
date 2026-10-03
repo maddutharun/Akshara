@@ -1,7 +1,65 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(30);
+
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values
+  (
+    '650e8400-e29b-41d4-a716-446655440001',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated', 'highlight-owner-a@test.invalid', '',
+    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()
+  ),
+  (
+    '650e8400-e29b-41d4-a716-446655440002',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated', 'authenticated', 'highlight-owner-b@test.invalid', '',
+    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()
+  );
+
+insert into public.sources (id, title, license_status, citation, is_active)
+values (
+  '650e8400-e29b-41d4-a716-446655440003',
+  'Synthetic RLS test fixture',
+  'public_domain',
+  'Generated test fixture; not a scripture source.',
+  true
+);
+
+insert into public.texts (id, slug, title_en, source_id, is_active)
+values (
+  '650e8400-e29b-41d4-a716-446655440004',
+  'synthetic-rls-fixture',
+  'Synthetic RLS fixture',
+  '650e8400-e29b-41d4-a716-446655440003',
+  true
+);
+
+insert into public.chapters (id, text_id, chapter_number)
+values (
+  '650e8400-e29b-41d4-a716-446655440005',
+  '650e8400-e29b-41d4-a716-446655440004',
+  1
+);
+
+insert into public.verses (
+  id, text_id, chapter_id, verse_number, canon_order,
+  devanagari_text, iast_text, search_normalized, source_id, status
+) values (
+  '650e8400-e29b-41d4-a716-446655440006',
+  '650e8400-e29b-41d4-a716-446655440004',
+  '650e8400-e29b-41d4-a716-446655440005',
+  1, 1, 'synthetic fixture', 'synthetic fixture', 'synthetic fixture',
+  '650e8400-e29b-41d4-a716-446655440003', 'published'
+);
+
+insert into public.private_highlights (user_id, verse_id, quote)
+values
+  ('650e8400-e29b-41d4-a716-446655440001', '650e8400-e29b-41d4-a716-446655440006', 'owner A fixture'),
+  ('650e8400-e29b-41d4-a716-446655440002', '650e8400-e29b-41d4-a716-446655440006', 'owner B fixture');
 
 select ok(
   not exists (
@@ -226,6 +284,40 @@ select ok(
   ),
   'highlights can only be created by their owner for published rights-cleared verses'
 );
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '650e8400-e29b-41d4-a716-446655440001',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"650e8400-e29b-41d4-a716-446655440001","role":"authenticated"}',
+  true
+);
+select is(
+  (select count(*)::integer from public.private_highlights),
+  1,
+  'a signed-in user can read their own highlight and not another account''s'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '650e8400-e29b-41d4-a716-446655440002',
+  true
+);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"650e8400-e29b-41d4-a716-446655440002","role":"authenticated"}',
+  true
+);
+select is(
+  (select count(*)::integer from public.private_highlights),
+  1,
+  'a second signed-in user can read their own highlight without seeing the first user''s'
+);
+reset role;
 
 select ok(
   not has_function_privilege('anon', 'public.resolve_comment_appeal(uuid,text,text)', 'execute'),

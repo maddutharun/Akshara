@@ -83,7 +83,7 @@ Do not use personal notes, private community content, licensed scripture text, o
 
 **Phase 2 remaining:** configure and privacy-review a real provider, populate server secrets and a provider-side hard budget, apply and test the quota/cache/feedback migration, approve each source-target pair via documented native-speaker review, and run live end-to-end quality/cost tests. Until these gates pass, Phase 2 is not 100% or launch-ready.
 
-**Phase 3 remaining:** repeat the passing clean-database migrations and 28 pgTAP assertions against the configured production Supabase project; seed rights-cleared passages and real reader/moderator accounts; verify report/block/mute/reply/appeal flows and Realtime across accounts; and test moderator authorization, audit entries, accessibility, abuse controls, and recovery in deployment.
+**Phase 3 remaining:** repeat the passing clean-database migrations and 30 pgTAP assertions against the configured production Supabase project; seed rights-cleared passages and real reader/moderator accounts; verify report/block/mute/reply/appeal flows and Realtime across accounts; and test moderator authorization, audit entries, accessibility, abuse controls, and recovery in deployment.
 
 **Not production-ready:** all three phases still need production Supabase configuration and cross-account validation; licensed source text; the AI provider and language quality decisions; end-to-end accessibility/security/performance checks; and deployment/monitoring.
 
