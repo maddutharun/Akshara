@@ -76,7 +76,12 @@ jobs:
         run: npx --yes supabase@2.119.0 db reset --local
 
       - name: Run pgTAP RLS and schema tests
-        run: npx --yes supabase@2.119.0 test db --local
+        run: |
+          set +e
+          npx --yes supabase@2.119.0 test db --local 2>&1 | tee "$RUNNER_TEMP/pgtap.log"
+          test_status=${PIPESTATUS[0]}
+          cat "$RUNNER_TEMP/pgtap.log" >> "$GITHUB_STEP_SUMMARY"
+          exit "$test_status"
 
       - name: Stop local Supabase
         if: always()
