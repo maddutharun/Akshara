@@ -465,7 +465,7 @@ The repository currently contains a polished, interactive local preview and init
 - Supabase Realtime subscription for UUID-backed verse discussions, backed by 20-second polling as a recoverable fallback when realtime is unavailable.
 - Initial Supabase schema/RLS migrations and database policy tests, plus request-validation and API unit tests. CI starts a disposable local database, applies migrations, and runs pgTAP without production credentials.
 - AI translation provider adapter, account-scoped cache and quota RPC, explicit source-target pair gate, generated-output labeling, and feedback submission path with RLS design and focused tests.
-- Lint, type-check, unit-test, dependency-audit, and production-build checks.
+- Lint, type-check, unit-test, full dependency-audit, and production-build checks. ESLint uses direct React, hooks, TypeScript, and accessibility plugins instead of the vulnerable Next ESLint preset dependency chain.
 
 ### Remaining before production
 
@@ -474,7 +474,7 @@ The repository currently contains a polished, interactive local preview and init
 - Execute database/RLS/trigger tests against seeded production Supabase data; verify authenticated catalog reading, private bookmarks/notes, progress, preferences, reports, relationships, replies, appeals, moderator authorization, and audit history end-to-end. Selected-text highlights remain browser-local.
 - Configure and privacy-review an AI provider, set a provider-side hard spending limit, and apply/test the AI cache/quota/feedback migration.
 - Complete and record native-speaker/scholar evaluation for every enabled language pair; the deployment allowlist remains empty by default.
-- Resolve the current high-severity advisory in the development-only Next.js ESLint dependency chain without taking npm's incompatible major-version downgrade; production dependencies currently pass `npm audit --omit=dev --audit-level=high`.
+- Keep dependencies current and the full `npm audit --audit-level=high` check passing. ESLint uses direct React, hooks, TypeScript, and accessibility plugins instead of the vulnerable Next ESLint preset dependency chain.
 - Configure GitHub remote access, deployment, monitoring, and production accessibility/security/performance checks.
 
 ### Plan audit: acceptance status

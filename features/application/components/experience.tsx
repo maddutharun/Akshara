@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { getSectionFromPathname, sectionPaths, type Section } from "@/features/application/section-routes";
 import {
   isSampleReaderPath,
@@ -258,6 +258,7 @@ export default function AksharaExperience() {
   const [catalogNotes, setCatalogNotes] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const [toast, setToast] = useState("");
   const [aiTranslationMode, setAiTranslationMode] = useState<AiTranslationMode>("fluent");
   const [generatedTranslations, setGeneratedTranslations] = useState<Record<string, GeneratedTranslation>>({});
@@ -274,6 +275,12 @@ export default function AksharaExperience() {
   const [authMessage, setAuthMessage] = useState("");
   const [readerResumePath, setReaderResumePath] = useState(sampleReaderPath);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (mobileSearchOpen) {
+      mobileSearchInputRef.current?.focus();
+    }
+  }, [mobileSearchOpen]);
   const [preferencesSyncReady, setPreferencesSyncReady] = useState(false);
   const [libraryTexts, setLibraryTexts] = useState<LibraryText[]>([]);
   const [libraryStatus, setLibraryStatus] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
@@ -1421,7 +1428,7 @@ export default function AksharaExperience() {
   }
 
   function renderCommunity() {
-    function renderThread(commentItem: CommunityComment, depth = 0): React.ReactNode {
+    function renderThread(commentItem: CommunityComment, depth = 0): ReactNode {
       const replies = communityComments.filter((item) => item.parent_comment_id === commentItem.id);
       const isOwnComment = commentItem.user_id === authUserId;
       const isDeleted = commentItem.status === "deleted";
@@ -1781,10 +1788,10 @@ export default function AksharaExperience() {
     <main className="app-shell" data-theme={dark ? "dark" : "light"}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className="sidebar" aria-label="Main navigation">
-        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); changeSection("Home"); }}>
+        <button className="brand" type="button" onClick={() => changeSection("Home")}>
           <span className="brand-mark" aria-hidden="true">अ</span>
           <span><span className="brand-name">akshara</span><span className="brand-caption">read with meaning</span></span>
-        </a>
+        </button>
         <div className="side-label">YOUR SPACE</div>
         <nav className="nav-list">
           {navItems.map(({ name, icon: Icon }) => (
@@ -1828,7 +1835,7 @@ export default function AksharaExperience() {
               <Search size={16} aria-hidden="true" />
               <input
                 aria-label="Search the library"
-                autoFocus
+                ref={mobileSearchInputRef}
                 placeholder="Search texts, chapters…"
                 value={search}
                 onChange={(event) => { setSearch(event.target.value); if (event.target.value) setSection("Library"); }}
@@ -2232,6 +2239,6 @@ export default function AksharaExperience() {
   );
 }
 
-function EmptyState({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+function EmptyState({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return <div className="empty-state">{icon}<h3>{title}</h3><p>{body}</p></div>;
 }

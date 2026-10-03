@@ -84,8 +84,13 @@ button:disabled {
   align-items: center;
   gap: 11px;
   padding: 0 12px;
+  border: 0;
+  background: none;
   color: var(--ink);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .brand-mark {
