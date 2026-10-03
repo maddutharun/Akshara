@@ -1,1 +1,1 @@
-export { POST } from "@/features/community/server/reports";
+export { GET, POST } from "@/features/community/server/reports";

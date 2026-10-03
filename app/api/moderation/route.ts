@@ -1,1 +1,1 @@
-export { POST } from "@/features/moderation/server/handlers";
+export { GET, POST } from "@/features/moderation/server/handlers";

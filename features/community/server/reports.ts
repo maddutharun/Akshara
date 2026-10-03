@@ -5,6 +5,25 @@ import { requireAuthenticatedUser } from "@/lib/supabase/authenticated-user";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const reasons = new Set(["harassment", "spam", "misinformation", "copyright", "other"]);
 
+export async function GET() {
+  const session = await requireAuthenticatedUser();
+  if (!session.ok) return session.response;
+
+  const { data, error } = await session.supabase
+    .from("comment_reports")
+    .select("id, comment_id, reason, details, status, created_at")
+    .eq("reporter_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    return NextResponse.json(
+      { error: "reports_unavailable", message: "Your reports could not be loaded." },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json({ reports: data });
+}
+
 export async function POST(request: Request) {
   const session = await requireAuthenticatedUser();
   if (!session.ok) return session.response;

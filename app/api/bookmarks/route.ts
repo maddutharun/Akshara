@@ -1,1 +1,1 @@
-export { DELETE, GET, POST } from "@/features/bookmarks/server/handlers";
+export { DELETE, GET, PATCH, POST } from "@/features/bookmarks/server/handlers";

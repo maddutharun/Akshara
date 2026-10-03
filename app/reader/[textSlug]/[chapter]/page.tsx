@@ -8,7 +8,10 @@ export default async function ReaderPage({
   params: Promise<{ textSlug: string; chapter: string }>;
 }) {
   const { textSlug, chapter } = await params;
-  if (!isSampleReaderRoute(textSlug, chapter)) notFound();
+  if (
+    !isSampleReaderRoute(textSlug, chapter) &&
+    (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(textSlug) || !/^[1-9]\d{0,5}$/.test(chapter))
+  ) notFound();
 
   return <AksharaExperience />;
 }

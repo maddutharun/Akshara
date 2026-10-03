@@ -1,1 +1,1 @@
-export { POST } from "@/features/community/server/appeals";
+export { GET, POST } from "@/features/community/server/appeals";

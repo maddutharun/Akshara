@@ -16,7 +16,32 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: "progress_unavailable", message: "Reading progress could not be loaded." }, { status: 502 });
   }
-  return NextResponse.json({ progress: data });
+  if (!data?.length) return NextResponse.json({ progress: [] });
+
+  const textIds = [...new Set(data.map((item) => item.text_id))];
+  const chapterIds = [...new Set(data.flatMap((item) => item.chapter_id ? [item.chapter_id] : []))];
+  const [{ data: texts, error: textsError }, { data: chapters, error: chaptersError }] = await Promise.all([
+    session.supabase.from("texts").select("id, slug").in("id", textIds),
+    chapterIds.length
+      ? session.supabase.from("chapters").select("id, chapter_number").in("id", chapterIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (textsError || chaptersError) {
+    return NextResponse.json({ error: "progress_unavailable", message: "Reading destinations could not be loaded." }, { status: 502 });
+  }
+
+  const slugsByTextId = new Map((texts ?? []).map((item) => [item.id, item.slug]));
+  const chapterNumbersById = new Map((chapters ?? []).map((item) => [item.id, item.chapter_number]));
+  return NextResponse.json({
+    progress: data.map((item) => {
+      const slug = slugsByTextId.get(item.text_id);
+      const chapterNumber = item.chapter_id ? chapterNumbersById.get(item.chapter_id) : undefined;
+      return {
+        ...item,
+        path: slug && chapterNumber ? `/reader/${slug}/${chapterNumber}` : null,
+      };
+    }),
+  });
 }
 
 export async function PUT(request: Request) {

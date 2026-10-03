@@ -4,6 +4,25 @@ import { requireAuthenticatedUser } from "@/lib/supabase/authenticated-user";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export async function GET() {
+  const session = await requireAuthenticatedUser();
+  if (!session.ok) return session.response;
+
+  const { data, error } = await session.supabase
+    .from("comment_appeals")
+    .select("id, comment_id, appeal_text, status, created_at")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    return NextResponse.json(
+      { error: "appeals_unavailable", message: "Your appeals could not be loaded." },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json({ appeals: data });
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const session = await requireAuthenticatedUser();
   if (!session.ok) return session.response;

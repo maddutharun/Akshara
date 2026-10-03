@@ -7,14 +7,6 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const languages = new Set(["en", "te", "hi"]);
 
 export async function GET(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) {
-    return NextResponse.json(
-      { error: "database_not_configured", message: "Community discussions are unavailable until Supabase is configured." },
-      { status: 503 },
-    );
-  }
-
   const params = new URL(request.url).searchParams;
   const verseId = params.get("verseId");
   const chapterId = params.get("chapterId");
@@ -26,6 +18,14 @@ export async function GET(request: Request) {
     return NextResponse.json(
       { error: "invalid_location", message: "Choose one valid verse or chapter." },
       { status: 400 },
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "database_not_configured", message: "Community discussions are unavailable until Supabase is configured." },
+      { status: 503 },
     );
   }
 
@@ -43,7 +43,23 @@ export async function GET(request: Request) {
       { status: 502 },
     );
   }
-  return NextResponse.json({ comments: data });
+  const authorIds = [...new Set((data ?? []).map((comment) => comment.user_id))];
+  const { data: profiles, error: profilesError } = authorIds.length
+    ? await supabase.from("profiles").select("id, display_name").in("id", authorIds)
+    : { data: [], error: null };
+  if (profilesError) {
+    return NextResponse.json(
+      { error: "comments_unavailable", message: "Discussion authors could not be loaded." },
+      { status: 502 },
+    );
+  }
+  const displayNames = new Map((profiles ?? []).map((profile) => [profile.id, profile.display_name]));
+  return NextResponse.json({
+    comments: (data ?? []).map((comment) => ({
+      ...comment,
+      author_name: displayNames.get(comment.user_id) ?? "Reader",
+    })),
+  });
 }
 
 export async function POST(request: Request) {

@@ -1,1 +1,1 @@
-export { DELETE, POST } from "@/features/community/server/relationships";
+export { DELETE, GET, POST } from "@/features/community/server/relationships";

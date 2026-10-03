@@ -20,7 +20,66 @@ export async function GET() {
       { status: 502 },
     );
   }
-  return NextResponse.json({ bookmarks: data });
+  if (!data?.length) return NextResponse.json({ bookmarks: [] });
+
+  const chapterIds = [...new Set(data.flatMap((bookmark) => bookmark.chapter_id ? [bookmark.chapter_id] : []))];
+  const verseIds = [...new Set(data.flatMap((bookmark) => bookmark.verse_id ? [bookmark.verse_id] : []))];
+  const [{ data: chapters, error: chaptersError }, { data: verses, error: versesError }] = await Promise.all([
+    chapterIds.length
+      ? session.supabase.from("chapters").select("id, text_id, chapter_number").in("id", chapterIds)
+      : Promise.resolve({ data: [], error: null }),
+    verseIds.length
+      ? session.supabase.from("verses").select("id, text_id, chapter_id, verse_number, devanagari_text").in("id", verseIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (chaptersError || versesError) {
+    return NextResponse.json(
+      { error: "bookmarks_unavailable", message: "Saved passage references could not be loaded." },
+      { status: 502 },
+    );
+  }
+
+  const chaptersById = new Map((chapters ?? []).map((chapter) => [chapter.id, chapter]));
+  const versesById = new Map((verses ?? []).map((verse) => [verse.id, verse]));
+  const textIds = [...new Set([
+    ...data.flatMap((bookmark) => bookmark.text_id ? [bookmark.text_id] : []),
+    ...(chapters ?? []).map((chapter) => chapter.text_id),
+    ...(verses ?? []).map((verse) => verse.text_id),
+  ])];
+  const { data: texts, error: textsError } = textIds.length
+    ? await session.supabase.from("texts").select("id, slug, title_en").in("id", textIds)
+    : { data: [], error: null };
+  if (textsError) {
+    return NextResponse.json(
+      { error: "bookmarks_unavailable", message: "Saved text references could not be loaded." },
+      { status: 502 },
+    );
+  }
+
+  const textsById = new Map((texts ?? []).map((text) => [text.id, text]));
+  const bookmarks = data.map((bookmark) => {
+    const verse = bookmark.verse_id ? versesById.get(bookmark.verse_id) : null;
+    const chapterId = verse?.chapter_id ?? bookmark.chapter_id;
+    const chapter = chapterId ? chaptersById.get(chapterId) : null;
+    const textId = verse?.text_id ?? chapter?.text_id ?? bookmark.text_id;
+    const text = textId ? textsById.get(textId) : null;
+    const verseNumber = verse?.verse_number;
+    return {
+      ...bookmark,
+      title: verse?.devanagari_text ?? text?.title_en ?? "Saved reading",
+      reference: verseNumber
+        ? `Chapter ${chapter?.chapter_number ?? "—"} · Verse ${verseNumber}`
+        : chapter
+          ? `Chapter ${chapter.chapter_number}`
+          : "Saved text",
+      path: text?.slug && chapter
+        ? `/reader/${text.slug}/${chapter.chapter_number}`
+        : text?.slug
+          ? `/library?text=${encodeURIComponent(text.slug)}`
+          : null,
+    };
+  });
+  return NextResponse.json({ bookmarks });
 }
 
 export async function POST(request: Request) {
@@ -74,6 +133,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "bookmark_failed", message: "The bookmark could not be saved." }, { status: 502 });
   }
   return NextResponse.json({ bookmark: data }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const session = await requireAuthenticatedUser();
+  if (!session.ok) return session.response;
+
+  const parsed = await readJsonBody(request, 5000);
+  if (!("value" in parsed)) return parsed.response;
+  if (!parsed.value || typeof parsed.value !== "object") {
+    return NextResponse.json({ error: "invalid_bookmark", message: "Bookmark details are required." }, { status: 400 });
+  }
+
+  const input = parsed.value as Record<string, unknown>;
+  const bookmarkId = input.bookmarkId;
+  const note = input.note;
+  if (
+    typeof bookmarkId !== "string" ||
+    !uuidPattern.test(bookmarkId) ||
+    (note !== null && typeof note !== "string") ||
+    (typeof note === "string" && note.length > 4000)
+  ) {
+    return NextResponse.json({ error: "invalid_bookmark", message: "Check the bookmark id and note length." }, { status: 400 });
+  }
+
+  const { data, error } = await session.supabase
+    .from("bookmarks")
+    .update({ note })
+    .eq("id", bookmarkId)
+    .select("id, text_id, chapter_id, verse_id, collection_name, note, created_at")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: "bookmark_update_failed", message: "The note could not be saved." }, { status: 502 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: "bookmark_not_found", message: "Bookmark not found." }, { status: 404 });
+  }
+  return NextResponse.json({ bookmark: data });
 }
 
 export async function DELETE(request: Request) {

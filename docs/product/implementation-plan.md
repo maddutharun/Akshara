@@ -113,7 +113,7 @@ Clearly labeled result → user feedback → optional scholar review
 - Before launch, evaluate every supported source/target language pair using a fixed set of representative passages reviewed by native speakers and Sanskrit scholars. Include accuracy, faithfulness, terminology consistency, readability, and harmful/misleading interpretation checks.
 - Track quality separately by language pair. Release a pair only after it meets the review threshold agreed by the editorial team; otherwise label it experimental or do not offer it.
 - Cache generated results by immutable source/edition and verse identifiers, source text version, target language, output mode, model/provider version, glossary version, and prompt version. Invalidate or version the cache when any of these inputs change.
-- Generate on demand, apply per-account and per-IP quotas, cap token/output length, set provider spend alerts and a hard monthly budget, and log cost without storing unnecessary personal data.
+- Generate on demand, apply database-enforced per-account quotas and trusted ingress/IP throttling, cap token/output length, set provider spend alerts and a hard monthly budget, and log cost without storing unnecessary personal data. Do not trust client-supplied forwarding headers for IP identity.
 - Keep provider calls behind a server-side adapter so the app can change providers without coupling product code to one vendor. Select one primary provider for launch after a documented quality, privacy, latency, language coverage, and cost evaluation; define a fallback only if it passes the same quality gate.
 - Do not send user comments, private notes, or other personal data as translation context by default. Disclose provider processing and retention practices before enabling a feature that sends user content.
 
@@ -443,13 +443,13 @@ The repository currently contains a polished, interactive local preview and init
 
 ### Progress estimate
 
-**Estimated overall completion: 39% of the three planned MVP phases**, using equal phase weighting and rough feature-readiness estimates of Phase 1: 71%, Phase 2: 10%, and Phase 3: 36%. This estimate is not a production-readiness score. It credits local behavior and unverified scaffolding only partially; live integration, editorial approval, and untested production flows do not count as complete.
+**Estimated overall completion: 76% of the three planned MVP phases**, using equal phase weighting and rough feature-readiness estimates of Phase 1: 84%, Phase 2: 70%, and Phase 3: 75%. This estimate is not a production-readiness score. It credits implementation and automated tests but does not count provider configuration, live integration, editorial approval, native-speaker evaluation, or untested production flows as complete.
 
 | Phase | Estimate | Implemented | Remaining |
 | --- | ---: | --- | --- |
-| Phase 1 — Trusted Reader | 71% | Responsive reading preview, addressable one-chapter sample reader, reader-accessible local notes/highlights, local last-read position and resume action, browser-local language/appearance preferences, language/script controls, library search, direct screen routes, local bookmarks | Verified editions/provenance, real searchable chapter corpus, account-synced bookmarks/progress/preferences |
-| Phase 2 — Evaluated AI Translation | 10% | Validated translation request boundary and explicit unavailable state | Approved provider adapter, evaluated language pairs, output provenance/reporting, caching, quotas, budget controls |
-| Phase 3 — Safe Community | 36% | Community preview; API/schema/RLS/moderation foundations; comment Realtime publication and subscription helper; comment edit/soft-delete and appeal APIs; same-passage approved-parent database trigger | Apply and test migrations against Supabase; connect real passage IDs/UI and Realtime, threaded replies, user safety UI, moderator queue/appeal resolution, and database/end-to-end tests |
+| Phase 1 — Trusted Reader | 84% | Responsive reading preview plus database-backed catalog/chapter APIs and UI, multilingual title search, chapter navigation, source provenance and human-reviewed translation display, account bookmark/note/progress/preference sync code with RLS foundations | Select and ingest a rights-cleared corpus, apply migrations and verify RLS/live sync with actual seeded records, sync highlights or explicitly exclude them from Phase 1 |
+| Phase 2 — Evaluated AI Translation | 70% | Authenticated and rights-cleared passage boundary; server-side OpenAI-compatible adapter; literal/fluent/explanation/summary modes; explicit language-pair allowlist; generated/unreviewed provenance; per-account cache; DB-enforced per-account quotas; private feedback/reporting; request/provider/API tests | Configure and review the real provider and hard spend cap; apply/test migration and schedule cleanup; add trusted ingress/IP throttling; complete native-speaker review per pair before allowlisting; run live cost, quality, privacy, reliability, and UX acceptance tests |
+| Phase 3 — Safe Community | 75% | Authenticated passage discussions with replies, live Supabase API reads/writes, author edit/removal, reports, block/mute, appeal submission; moderator-only queue for pending/flagged comments, reports and appeals; reasoned audited moderation RPC decisions; Realtime subscription with periodic refresh fallback; API/RLS foundations and focused unit tests | Apply/test migrations and RLS on Supabase; validate all workflows with seeded real roles/data; verify Realtime, audit records, moderation recovery, accessibility, and abuse controls in a deployed environment |
 
 ### Implemented locally
 
@@ -458,33 +458,38 @@ The repository currently contains a polished, interactive local preview and init
 - Browser-local last-opened reader position with a Continue reading action.
 - Browser-local reading language and appearance preferences, validated on load and retained across app routes/reloads.
 - Reader-accessible browser-local private note and selected-text highlight controls.
+- Database-backed catalog/search and chapter APIs that return only active, rights-status-approved sources and texts, published verses, and human-reviewed translations; direct database reader routes include chapter navigation and source attribution.
+- Signed-in bookmark/note and reading-progress synchronization against real catalog IDs; account language/appearance preferences have a private RLS-protected table and authenticated read/write API.
 - Supabase magic-link auth and authenticated API route foundations for bookmarks, reading progress, comments, reports, relationships, and moderation.
-- Authenticated community APIs for comment submission/edit/soft-delete, report and block/mute actions, appeal submission, and moderator decisions; database trigger rejects replies to non-approved or different-passage comments.
-- Supabase Realtime publication migration and browser subscription helper for UUID-backed chapter/verse comment locations.
-- Initial Supabase schema/RLS migrations and database policy tests, plus request-validation and API unit tests.
+- Authenticated passage discussion UI/API for comments and threaded replies, author edit/soft-delete, reports, block/mute, appeals, moderator queue/decisions, and audited database RPCs. Reports, relationships, and appeals have explicit owner/role RLS boundaries.
+- Supabase Realtime subscription for UUID-backed verse discussions, backed by 20-second polling as a recoverable fallback when realtime is unavailable.
+- Initial Supabase schema/RLS migrations and database policy tests, plus request-validation and API unit tests. CI starts a disposable local database, applies migrations, and runs pgTAP without production credentials.
+- AI translation provider adapter, account-scoped cache and quota RPC, explicit source-target pair gate, generated-output labeling, and feedback submission path with RLS design and focused tests.
 - Lint, type-check, unit-test, dependency-audit, and production-build checks.
 
 ### Remaining before production
 
-- Choose verified source editions and confirm redistribution rights.
-- Configure a Supabase project, apply all migrations, and execute database/RLS tests against PostgreSQL.
-- Connect the UI to authenticated persistence and complete end-to-end auth, private reading data, community, and moderation workflows.
-- Select an AI provider only after privacy, budget, and language-pair quality reviews; implement and evaluate the provider integration.
+- Select an exact source edition, confirm its redistribution rights/attribution/share-alike terms, prepare and verify corpus completeness, and populate source/text/chapter/verse/translation records.
+- Configure a Supabase project and apply all migrations.
+- Execute database/RLS/trigger tests against seeded Supabase data; verify authenticated catalog reading, private bookmarks/notes, progress, preferences, reports, relationships, replies, appeals, moderator authorization, and audit history end-to-end. Selected-text highlights remain browser-local.
+- Configure and privacy-review an AI provider, set a provider-side hard spending limit, and apply/test the AI cache/quota/feedback migration.
+- Complete and record native-speaker/scholar evaluation for every enabled language pair; the deployment allowlist remains empty by default.
+- Resolve the current high-severity advisory in the development-only Next.js ESLint dependency chain without taking npm's incompatible major-version downgrade; production dependencies currently pass `npm audit --omit=dev --audit-level=high`.
 - Configure GitHub remote access, deployment, monitoring, and production accessibility/security/performance checks.
 
 ### Plan audit: acceptance status
 
 | Planned outcome | Status | Evidence or remaining acceptance test |
 | --- | --- | --- |
-| Mobile-first reader, library, primary navigation | **Preview implemented** | Responsive UI, direct routes, and one illustrative chapter; no verified catalog or complete corpus. |
-| Multi-language source presentation and script controls | **Preview implemented** | Sample language switching and IAST toggle only; publishable source editions and reviewed translations remain absent. |
-| Source/edition provenance and search | **Blocked by rights-cleared corpus** | Schema and preview search exist; no chosen, licensed, populated corpus or end-to-end catalog search. |
-| Private bookmarks, notes, highlights, reading progress | **Local preview implemented; account sync unverified** | Browser storage works; authenticated API/schema foundations are not connected to verified passage IDs or tested on Supabase. |
-| AI translation and explanations | **Not implemented** | Validation and honest unavailable state exist; provider, approved language pairs, evaluation, cache, quotas, and spend controls are absent. |
-| Community comments and replies | **Backend foundations implemented; product flow incomplete** | Read/post/edit/soft-delete APIs and reply constraints exist; preview UI remains local and has no production passage IDs, connected discussion UI, or verified realtime operation. |
-| Reports, block/mute, moderation, appeals | **Backend foundations partial; product flow incomplete** | Report/relationship/moderation/appeal APIs and RLS foundations exist; no connected safety controls, moderation queue UI, appeal-resolution UI, or live RLS verification. |
-| Realtime updates | **Locally prepared, not operationally verified** | Publication migration and subscription helper exist; migrations need applying and testing on a configured Supabase project, then wiring to live discussion components. |
+| Mobile-first reader, library, primary navigation | **Application integration implemented; live content pending** | Responsive UI, searchable database catalog, dynamic database-backed chapter route, source attribution, and chapter navigation; no catalog is populated in the current unconfigured project. |
+| Multi-language source presentation and script controls | **Application integration implemented; edition/translation choices pending** | Database reader shows Devanagari, IAST toggle, and only human-reviewed translations for the selected language; no reviewed corpus is configured. |
+| Source/edition provenance and search | **Application/API implemented; rights-cleared corpus pending** | Catalog and chapter endpoints require active sources with approved license status and include citation links; no work-level source has yet been selected and ingested. |
+| Private bookmarks, notes, highlights, reading progress | **Account sync implemented in code; live verification pending** | Bookmarks/notes, reading progress, and preferences have authenticated sync paths and RLS schema; selected-text highlights remain explicitly device-local in this MVP. Real seeded records and a Supabase RLS test run are outstanding. |
+| AI translation and explanations | **Server implementation and unit coverage present; launch gates open** | Authenticated published/rights-cleared verses only; server-side configurable provider; four modes; language-pair allowlist; per-account cache; 3/minute and 30/day uncached request quota; output token ceiling; provenance and feedback. Live provider, external budget, trusted ingress/IP limits, pair reviews, migration/RLS, cleanup schedule, and production tests remain. |
+| Community comments and replies | **Connected application/API implementation; live database validation pending** | Reader Discuss opens the UUID-backed verse thread; visible comments and replies load through authenticated/anonymous RLS APIs, writes enter moderation, authors can edit/remove, and a Realtime refresh plus polling fallback is wired. Seeded Supabase and cross-account browser tests remain. |
+| Reports, block/mute, moderation, appeals | **User and moderator flows implemented; production authorization validation pending** | Report UI, owner controls, relationships, appeal submission, moderator queue, reasoned RPC decisions and audit foundation are connected. Must still verify RLS and audit results against real moderator and reader accounts. |
+| Realtime updates | **Application wired with fallback; live Supabase operation unverified** | Verse subscription refreshes discussion; periodic refresh remains active if Realtime cannot connect. Publication migration and credentials must be applied/configured and tested in deployment. |
 | GitHub CI and deployment | **Local workflow only** | CI workflow exists but there is no configured Git remote or authenticated repository; Actions and deployment have not run. |
 | Production security, accessibility, privacy, monitoring | **Not launch-verified** | Local lint/build/tests/audit pass; end-to-end checks, configuration, monitoring, and deployment are outstanding. |
 
-Content and provider candidates, together with the rights/privacy gates that remain before selection, are documented in [content and provider sourcing](./content-and-provider-sourcing.md). “100%” requires the remaining acceptance tests above to pass—not merely writing more code. Current blockers are missing external service/repository access, a rights-cleared content corpus, and provider/language-pair approval. See [README.md](./README.md) for local setup and configuration boundaries.
+Content and provider candidates, together with rights/privacy gates, are documented in [content and provider sourcing](./content-and-provider-sourcing.md). Per-pair human evaluation is specified in [the translation quality review protocol](./translation-quality-evaluation.md). “100%” requires the remaining acceptance tests above to pass—not merely writing more code. Current blockers include missing external service access, rights-cleared content, provider and spend configuration, language-pair approval, and live community/RLS verification. See [README.md](../../README.md) for setup boundaries.

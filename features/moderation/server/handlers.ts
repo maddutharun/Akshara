@@ -4,6 +4,79 @@ import { requireAuthenticatedUser } from "@/lib/supabase/authenticated-user";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export async function GET() {
+  const session = await requireAuthenticatedUser();
+  if (!session.ok) return session.response;
+
+  const { data: profile, error: profileError } = await session.supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", session.user.id)
+    .maybeSingle();
+  if (profileError) {
+    return NextResponse.json(
+      { error: "moderation_unavailable", message: "Moderator permissions could not be checked." },
+      { status: 502 },
+    );
+  }
+  if (!profile || !["moderator", "admin"].includes(profile.role)) {
+    return NextResponse.json(
+      { error: "moderator_required", message: "Moderator permissions are required." },
+      { status: 403 },
+    );
+  }
+
+  const [commentsResult, reportsResult, appealsResult] = await Promise.all([
+    session.supabase
+      .from("comments")
+      .select("id, user_id, text_id, chapter_id, verse_id, parent_comment_id, body, language, status, created_at")
+      .in("status", ["pending", "flagged"])
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .limit(100),
+    session.supabase
+      .from("comment_reports")
+      .select("id, comment_id, reporter_id, reason, details, status, created_at")
+      .in("status", ["open", "reviewing"])
+      .order("created_at", { ascending: true })
+      .limit(100),
+    session.supabase
+      .from("comment_appeals")
+      .select("id, comment_id, user_id, appeal_text, status, created_at")
+      .in("status", ["open", "reviewing"])
+      .order("created_at", { ascending: true })
+      .limit(100),
+  ]);
+  if (commentsResult.error || reportsResult.error || appealsResult.error) {
+    return NextResponse.json(
+      { error: "moderation_queue_unavailable", message: "The moderation queue could not be loaded." },
+      { status: 502 },
+    );
+  }
+  const reportedCommentIds = [...new Set((reportsResult.data ?? []).map((report) => report.comment_id))];
+  const { data: reportedComments, error: reportedCommentsError } = reportedCommentIds.length
+    ? await session.supabase
+        .from("comments")
+        .select("id, user_id, body, status")
+        .in("id", reportedCommentIds)
+    : { data: [], error: null };
+  if (reportedCommentsError) {
+    return NextResponse.json(
+      { error: "moderation_queue_unavailable", message: "Reported comment context could not be loaded." },
+      { status: 502 },
+    );
+  }
+  const commentsById = new Map((reportedComments ?? []).map((comment) => [comment.id, comment]));
+  return NextResponse.json({
+    comments: commentsResult.data ?? [],
+    reports: (reportsResult.data ?? []).map((report) => ({
+      ...report,
+      comment: commentsById.get(report.comment_id) ?? null,
+    })),
+    appeals: appealsResult.data ?? [],
+  });
+}
+
 export async function POST(request: Request) {
   const session = await requireAuthenticatedUser();
   if (!session.ok) return session.response;
