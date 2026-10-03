@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(28);
 
 select ok(
   not exists (
@@ -14,7 +14,8 @@ select ok(
         'verse_translations', 'bookmarks', 'reading_progress', 'comments',
         'comment_reports', 'user_relationships', 'comment_appeals',
         'moderation_audit', 'translation_cache', 'reader_preferences',
-        'translation_usage_daily', 'translation_usage_minutely', 'translation_feedback'
+        'translation_usage_daily', 'translation_usage_minutely', 'translation_feedback',
+        'private_highlights'
       ])
       and not c.relrowsecurity
   ),
@@ -185,6 +186,45 @@ select ok(
   has_function_privilege('authenticated', 'public.resolve_comment_appeal(uuid,text,text)', 'execute')
   and has_function_privilege('authenticated', 'public.resolve_comment_report(uuid,text,text)', 'execute'),
   'authenticated role can invoke moderator-checked appeal and report RPCs'
+);
+
+select ok(
+  not has_table_privilege('anon', 'public.private_highlights', 'select')
+  and has_table_privilege('authenticated', 'public.private_highlights', 'select')
+  and has_table_privilege('authenticated', 'public.private_highlights', 'insert')
+  and has_table_privilege('authenticated', 'public.private_highlights', 'delete'),
+  'private highlights are inaccessible to anonymous clients and available only through authenticated RLS'
+);
+
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'private_highlights'
+      and policyname = 'users read their own private highlights'
+      and qual like '%auth.uid%'
+  )
+  and exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'private_highlights'
+      and policyname = 'users delete their own private highlights'
+      and qual like '%auth.uid%'
+  ),
+  'private highlights can only be read or deleted by their owning account'
+);
+
+select ok(
+  exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'private_highlights'
+      and policyname = 'users create highlights on published verses'
+      and with_check like '%auth.uid%'
+      and with_check like '%published%'
+      and with_check like '%public_domain%'
+  ),
+  'highlights can only be created by their owner for published rights-cleared verses'
 );
 
 select ok(

@@ -51,6 +51,8 @@ type SavedHighlight = {
   id: string;
   quote: string;
   reference: string;
+  verseId?: string;
+  cloudHighlightId?: string;
 };
 type LibraryText = {
   id: string;
@@ -174,7 +176,9 @@ function isSavedHighlight(value: unknown): value is SavedHighlight {
   const item = value as Record<string, unknown>;
   return typeof item.id === "string" &&
     typeof item.quote === "string" &&
-    typeof item.reference === "string";
+    typeof item.reference === "string" &&
+    (item.verseId === undefined || (typeof item.verseId === "string" && uuidPattern.test(item.verseId))) &&
+    item.cloudHighlightId === undefined;
 }
 
 function isGeneratedTranslation(value: unknown): value is GeneratedTranslation {
@@ -852,6 +856,47 @@ export default function AksharaExperience() {
   }, [authUser]);
 
   useEffect(() => {
+    setSavedHighlights((current) => current.filter((item) => !item.cloudHighlightId));
+    if (!authUserId) {
+      return;
+    }
+
+    let active = true;
+    fetch("/api/highlights")
+      .then(async (response) => {
+        const result = (await response.json()) as {
+          highlights?: { id: string; verseId: string; quote: string; reference: string }[];
+          message?: string;
+        };
+        if (!response.ok) throw new Error(result.message ?? "Private highlights could not be synced.");
+        return result.highlights ?? [];
+      })
+      .then((highlights) => {
+        if (!active) return;
+        const cloudItems: SavedHighlight[] = highlights.map((item) => ({
+          id: item.id,
+          quote: item.quote,
+          reference: item.reference,
+          verseId: item.verseId,
+          cloudHighlightId: item.id,
+        }));
+        setSavedHighlights((current) => {
+          const localOnly = current.filter((item) => !item.cloudHighlightId);
+          return [
+            ...cloudItems,
+            ...localOnly.filter((item) => !cloudItems.some(
+              (cloud) => cloud.verseId === item.verseId && cloud.quote === item.quote,
+            )),
+          ].slice(0, 100);
+        });
+      })
+      .catch((error: unknown) => {
+        if (active) setToast(error instanceof Error ? error.message : "Private highlights could not be synced.");
+      });
+    return () => { active = false; };
+  }, [authUserId]);
+
+  useEffect(() => {
     if (!authUser) return;
     let active = true;
     fetch("/api/reading-progress")
@@ -1193,23 +1238,125 @@ export default function AksharaExperience() {
     }
   }
 
-  function highlightSelection() {
-    const quote = window.getSelection()?.toString().trim();
-    if (!quote) {
-      setToast("Select a few words in the sample verse or translation first.");
+  async function highlightSelection() {
+    const selection = window.getSelection();
+    const quote = selection?.toString().trim();
+    if (!selection || !quote) {
+      setToast("Select words in a verse or translation first.");
       return;
     }
-    const nextHighlights = [
-      { id: `${sampleVerse.id}:${Date.now()}`, quote, reference: sampleVerse.reference },
-      ...savedHighlights,
-    ].slice(0, 100);
+
+    const range = selection.rangeCount ? selection.getRangeAt(0) : null;
+    const startNode = range?.startContainer;
+    const endNode = range?.endContainer;
+    const startElement = startNode?.nodeType === Node.ELEMENT_NODE
+      ? startNode as Element
+      : startNode?.parentElement;
+    const endElement = endNode?.nodeType === Node.ELEMENT_NODE
+      ? endNode as Element
+      : endNode?.parentElement;
+    const startVerse = startElement?.closest<HTMLElement>("[data-reader-selection]");
+    const endVerse = endElement?.closest<HTMLElement>("[data-reader-selection]");
+    if (!startVerse || startVerse !== endVerse) {
+      setToast("Select text within a single verse or translation.");
+      return;
+    }
+
+    const verseId = startVerse.dataset.verseId;
+    const reference = startVerse.dataset.readerReference ?? sampleVerse.reference;
+    const localHighlight: SavedHighlight = {
+      id: `${verseId ?? sampleVerse.id}:${Date.now()}`,
+      quote,
+      reference,
+      ...(verseId ? { verseId } : {}),
+    };
+    const saveOnDevice = (item: SavedHighlight) => {
+      const localItems = [
+        item,
+        ...savedHighlights.filter((highlight) => !highlight.cloudHighlightId && highlight.id !== item.id),
+      ].slice(0, 100);
+      window.localStorage.setItem("akshara-highlights", JSON.stringify(localItems));
+      setSavedHighlights((current) => [
+        item,
+        ...current.filter((highlight) => highlight.id !== item.id),
+      ].slice(0, 100));
+    };
+
     try {
-      window.localStorage.setItem("akshara-highlights", JSON.stringify(nextHighlights));
-      setSavedHighlights(nextHighlights);
-      window.getSelection()?.removeAllRanges();
+      if (authUserId && verseId) {
+        const response = await fetch("/api/highlights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verseId, quote }),
+        });
+        const result = (await response.json()) as {
+          highlight?: { id: string; verseId: string; quote: string };
+          message?: string;
+        };
+        if (!response.ok || !result.highlight) {
+          throw new Error(result.message ?? "The account highlight could not be synced.");
+        }
+        const highlight = result.highlight;
+        setSavedHighlights((current) => [
+          {
+            id: highlight.id,
+            quote: highlight.quote,
+            reference,
+            verseId: highlight.verseId,
+            cloudHighlightId: highlight.id,
+          },
+          ...current.filter((item) => item.id !== highlight.id),
+        ].slice(0, 100));
+        selection.removeAllRanges();
+        setToast("Private highlight saved to your account.");
+        return;
+      }
+
+      saveOnDevice(localHighlight);
+      selection.removeAllRanges();
       setToast("Passage saved to your private highlights on this device.");
-    } catch {
+    } catch (error) {
+      if (authUserId && verseId) {
+        try {
+          saveOnDevice(localHighlight);
+          selection.removeAllRanges();
+          setToast(error instanceof Error
+            ? `Saved on this device; account sync failed: ${error.message}`
+            : "Saved on this device; account sync failed.");
+          return;
+        } catch {
+          setToast("The highlight could not be saved locally or synced. Please check your connection and storage permissions.");
+          return;
+        }
+      }
       setToast("This browser could not save the highlight. Please check storage permissions.");
+    }
+  }
+
+  async function removePrivateHighlight(item: SavedHighlight) {
+    if (item.cloudHighlightId) {
+      try {
+        const response = await fetch(`/api/highlights?id=${encodeURIComponent(item.cloudHighlightId)}`, {
+          method: "DELETE",
+        });
+        const result = (await response.json()) as { message?: string };
+        if (!response.ok) throw new Error(result.message ?? "The account highlight could not be removed.");
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : "The account highlight could not be removed.");
+        return;
+      }
+    }
+
+    const next = savedHighlights.filter((highlight) => highlight.id !== item.id);
+    try {
+      window.localStorage.setItem(
+        "akshara-highlights",
+        JSON.stringify(next.filter((highlight) => !highlight.cloudHighlightId)),
+      );
+      setSavedHighlights(next);
+      setToast(item.cloudHighlightId ? "Private highlight removed from your account." : "Highlight removed from this device.");
+    } catch {
+      setToast("This browser could not remove the highlight. Please check storage permissions.");
     }
   }
 
@@ -1382,7 +1529,7 @@ export default function AksharaExperience() {
       <>
         <div className="eyebrow"><span className="eyebrow-dot" /> YOUR PRIVATE LIBRARY</div>
         <h1 className="view-title">Saved for another moment.</h1>
-        <p className="view-intro">{authUser ? "Your account bookmarks sync across devices. Private highlights remain on this browser." : "Your bookmarks and notes are stored only in this browser until you sign in."}</p>
+        <p className="view-intro">{authUser ? "Your account bookmarks and highlights on verified verses sync across devices; sample highlights remain on this browser." : "Your bookmarks, notes, and highlights are stored only in this browser until you sign in."}</p>
         {savedVerses.length || savedHighlights.length ? (
           <div className="reading-card">
             {savedVerses.map((item) => (
@@ -1406,16 +1553,7 @@ export default function AksharaExperience() {
                 <button
                   className="button-quiet"
                   type="button"
-                  onClick={() => {
-                    const next = savedHighlights.filter((highlight) => highlight.id !== item.id);
-                    try {
-                      window.localStorage.setItem("akshara-highlights", JSON.stringify(next));
-                      setSavedHighlights(next);
-                      setToast("Highlight removed from this device.");
-                    } catch {
-                      setToast("This browser could not remove the highlight. Please check storage permissions.");
-                    }
-                  }}
+                  onClick={() => void removePrivateHighlight(item)}
                 >Remove</button>
               </div>
             ))}
@@ -1776,7 +1914,7 @@ export default function AksharaExperience() {
             <button className="button-secondary" type="button" onClick={() => setDark((value) => !value)}>{dark ? <Sun size={15} /> : <Moon size={15} />}{dark ? "Light preview" : "Dark preview"}</button>
           </div>
           <div className="list-row">
-            <div className="list-row-main"><p className="list-row-title">Privacy</p><p className="list-row-meta">{authUser ? "Account saves sync when the database is available; selected-text highlights stay on this browser." : "Bookmarks, notes, and highlights stay on this browser until you sign in to a configured database."}</p></div>
+            <div className="list-row-main"><p className="list-row-title">Privacy</p><p className="list-row-meta">{authUser ? "Account saves sync when the database is available; highlights from sample passages stay on this browser." : "Bookmarks, notes, and highlights stay on this browser until you sign in to a configured database."}</p></div>
             <ShieldCheck size={18} color="var(--accent)" />
           </div>
         </div>
@@ -1911,17 +2049,32 @@ export default function AksharaExperience() {
                             <span className="verse-number">Verse {verse.verse_number}</span>
                             <span>{verse.source.title}{verse.source.edition ? ` · ${verse.source.edition}` : ""}</span>
                           </div>
-                          <p className="verse-sanskrit" lang="sa-Deva" data-reader-selection>{verse.devanagari_text}</p>
+                          <p
+                            className="verse-sanskrit"
+                            lang="sa-Deva"
+                            data-reader-selection
+                            data-verse-id={verse.id}
+                            data-reader-reference={`Chapter ${readerChapter.chapter.chapter_number} · Verse ${verse.verse_number}`}
+                          >{verse.devanagari_text}</p>
                           {showIast && <p className="verse-iast" lang="sa-Latn">{verse.iast_text}</p>}
                           {translation ? (
                             <>
-                              <p className="verse-translation" data-reader-selection lang={translation.language}>{translation.translation_text}</p>
+                              <p
+                                className="verse-translation"
+                                data-reader-selection
+                                data-verse-id={verse.id}
+                                data-reader-reference={`Chapter ${readerChapter.chapter.chapter_number} · Verse ${verse.verse_number}`}
+                                lang={translation.language}
+                              >{translation.translation_text}</p>
                               <p className="list-row-meta">Human-reviewed {translation.mode} translation · Source version {translation.source_version}</p>
                             </>
                           ) : (
                             <p className="demo-notice">No human-reviewed translation is available in {language} for this verse.</p>
                           )}
                           <div className="verse-actions">
+                            <button className="button-quiet" type="button" onClick={() => void highlightSelection()}>
+                              <Highlighter size={14} /> Save selected words
+                            </button>
                             <button
                               className="button-secondary"
                               type="button"
@@ -1946,6 +2099,8 @@ export default function AksharaExperience() {
                               <p
                                 className="verse-translation"
                                 data-reader-selection
+                                data-verse-id={verse.id}
+                                data-reader-reference={`Chapter ${readerChapter.chapter.chapter_number} · Verse ${verse.verse_number}`}
                                 lang={generatedTranslations[verse.id].language}
                               >
                                 {generatedTranslations[verse.id].output}
