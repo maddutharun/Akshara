@@ -75,7 +75,7 @@ Do not use personal notes, private community content, licensed scripture text, o
 
 ## Implementation status
 
-**Estimated overall completion: 76% of the three planned MVP phases.** This is a rough, equally weighted feature-readiness estimate—not a production-readiness claim or count of files: Phase 1 is estimated at 84%, Phase 2 at 70%, and Phase 3 at 75%. It credits implementation and automated tests, not unverified live services, editorial approval, or human quality evaluation.
+**Estimated overall completion: 78% of the three planned MVP phases.** This is a rough, equally weighted feature-readiness estimate—not a production-readiness claim or count of files: Phase 1 is estimated at 84%, Phase 2 at 70%, and Phase 3 at 80%. It credits implementation and automated tests, including successful local Supabase migration/pgTAP CI, but not unverified production services, editorial approval, or human quality evaluation.
 
 **Implemented locally:** responsive reader/library/community preview; direct URLs for the five primary screens and an addressable one-chapter sample reader at `/reader/sanskrit-reading/1`; working client navigation under the production CSP; browser-local bookmarks, reader-accessible private notes/highlights, resume-to-last-opened reader position, and validated language/appearance preferences; search and language/script controls; unsupported sample reader paths return 404; auth/API/schema foundations; request-validation and route tests; lint, typecheck, unit-test, production-dependency audit, and production-build checks.
 
@@ -85,11 +85,11 @@ Do not use personal notes, private community content, licensed scripture text, o
 
 **Phase 2 remaining:** configure and privacy-review a real provider, populate server secrets and a provider-side hard budget, apply and test the quota/cache/feedback migration, approve each source-target pair via documented native-speaker review, and run live end-to-end quality/cost tests. Until these gates pass, Phase 2 is not 100% or launch-ready.
 
-**Phase 3 remaining:** apply and run the full database/RLS/trigger suite on a configured Supabase project; seed rights-cleared passages, users, comments and moderator roles; verify the full report/block/mute/reply/appeal flows and Realtime with real accounts; and test moderator authorization, audit entries, accessibility, abuse controls, and recovery behavior in a deployed environment.
+**Phase 3 remaining:** repeat the passing local migrations and 25 pgTAP assertions against the configured production Supabase project; seed rights-cleared passages and real reader/moderator accounts; verify report/block/mute/reply/appeal flows and Realtime across accounts; and test moderator authorization, audit entries, accessibility, abuse controls, and recovery in deployment.
 
 **Dependency security remaining:** resolve the full-audit high-severity development-tool advisory without downgrading the Next.js/ESLint toolchain to incompatible major versions. The production dependency tree currently audits clean; keep monitoring for a patched `braces` release or use a reviewed compatible linter replacement.
 
-**Not production-ready:** all three phases still need live Supabase migration/RLS validation; licensed source text; the AI provider and language quality decisions; end-to-end accessibility/security/performance checks; GitHub remote; and deployment/monitoring.
+**Not production-ready:** all three phases still need production Supabase configuration and cross-account validation; licensed source text; the AI provider and language quality decisions; end-to-end accessibility/security/performance checks; and deployment/monitoring.
 
 See the [implementation plan](./docs/product/implementation-plan.md) for product scope and launch gates, and the [frontend design direction](./docs/design/frontend-design-direction.md) for the visual system.
 

@@ -443,13 +443,13 @@ The repository currently contains a polished, interactive local preview and init
 
 ### Progress estimate
 
-**Estimated overall completion: 76% of the three planned MVP phases**, using equal phase weighting and rough feature-readiness estimates of Phase 1: 84%, Phase 2: 70%, and Phase 3: 75%. This estimate is not a production-readiness score. It credits implementation and automated tests but does not count provider configuration, live integration, editorial approval, native-speaker evaluation, or untested production flows as complete.
+**Estimated overall completion: 78% of the three planned MVP phases**, using equal phase weighting and rough feature-readiness estimates of Phase 1: 84%, Phase 2: 70%, and Phase 3: 80%. This estimate is not a production-readiness score. It credits implementation and automated tests, including successful local Supabase migration/pgTAP CI, but does not count provider configuration, production integration, editorial approval, native-speaker evaluation, or untested production flows as complete.
 
 | Phase | Estimate | Implemented | Remaining |
 | --- | ---: | --- | --- |
 | Phase 1 — Trusted Reader | 84% | Responsive reading preview plus database-backed catalog/chapter APIs and UI, multilingual title search, chapter navigation, source provenance and human-reviewed translation display, account bookmark/note/progress/preference sync code with RLS foundations | Select and ingest a rights-cleared corpus, apply migrations and verify RLS/live sync with actual seeded records, sync highlights or explicitly exclude them from Phase 1 |
 | Phase 2 — Evaluated AI Translation | 70% | Authenticated and rights-cleared passage boundary; server-side OpenAI-compatible adapter; literal/fluent/explanation/summary modes; explicit language-pair allowlist; generated/unreviewed provenance; per-account cache; DB-enforced per-account quotas; private feedback/reporting; request/provider/API tests | Configure and review the real provider and hard spend cap; apply/test migration and schedule cleanup; add trusted ingress/IP throttling; complete native-speaker review per pair before allowlisting; run live cost, quality, privacy, reliability, and UX acceptance tests |
-| Phase 3 — Safe Community | 75% | Authenticated passage discussions with replies, live Supabase API reads/writes, author edit/removal, reports, block/mute, appeal submission; moderator-only queue for pending/flagged comments, reports and appeals; reasoned audited moderation RPC decisions; Realtime subscription with periodic refresh fallback; API/RLS foundations and focused unit tests | Apply/test migrations and RLS on Supabase; validate all workflows with seeded real roles/data; verify Realtime, audit records, moderation recovery, accessibility, and abuse controls in a deployed environment |
+| Phase 3 — Safe Community | 80% | Authenticated passage discussions with replies, live Supabase API reads/writes, author edit/removal, reports, block/mute, appeal submission; moderator-only queue for pending/flagged comments, reports and appeals; reasoned audited moderation RPC decisions; Realtime subscription with periodic refresh fallback; local migration application and 25 passing pgTAP schema/RLS assertions in GitHub Actions | Apply migrations to the configured production project; validate all workflows with seeded real roles/data; verify cross-account Realtime, audit records, moderation recovery, accessibility, and abuse controls in a deployed environment |
 
 ### Implemented locally
 
@@ -470,8 +470,8 @@ The repository currently contains a polished, interactive local preview and init
 ### Remaining before production
 
 - Select an exact source edition, confirm its redistribution rights/attribution/share-alike terms, prepare and verify corpus completeness, and populate source/text/chapter/verse/translation records.
-- Configure a Supabase project and apply all migrations.
-- Execute database/RLS/trigger tests against seeded Supabase data; verify authenticated catalog reading, private bookmarks/notes, progress, preferences, reports, relationships, replies, appeals, moderator authorization, and audit history end-to-end. Selected-text highlights remain browser-local.
+- Configure a production Supabase project and apply all migrations; local Supabase migration and pgTAP tests pass in CI.
+- Execute database/RLS/trigger tests against seeded production Supabase data; verify authenticated catalog reading, private bookmarks/notes, progress, preferences, reports, relationships, replies, appeals, moderator authorization, and audit history end-to-end. Selected-text highlights remain browser-local.
 - Configure and privacy-review an AI provider, set a provider-side hard spending limit, and apply/test the AI cache/quota/feedback migration.
 - Complete and record native-speaker/scholar evaluation for every enabled language pair; the deployment allowlist remains empty by default.
 - Resolve the current high-severity advisory in the development-only Next.js ESLint dependency chain without taking npm's incompatible major-version downgrade; production dependencies currently pass `npm audit --omit=dev --audit-level=high`.
