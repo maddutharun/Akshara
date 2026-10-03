@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(35);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -301,6 +301,53 @@ select is(
   1,
   'a signed-in user can read their own highlight and not another account''s'
 );
+
+select lives_ok(
+  $$
+    insert into public.private_highlights (user_id, verse_id, quote)
+    values (
+      '650e8400-e29b-41d4-a716-446655440001',
+      '650e8400-e29b-41d4-a716-446655440006',
+      'owner A live insert'
+    )
+  $$,
+  'a signed-in user can create a highlight for a published cleared verse'
+);
+
+select throws_ok(
+  $$
+    insert into public.private_highlights (user_id, verse_id, quote)
+    values (
+      '650e8400-e29b-41d4-a716-446655440002',
+      '650e8400-e29b-41d4-a716-446655440006',
+      'spoofed owner insert'
+    )
+  $$,
+  '42501',
+  'users cannot assign a new highlight to another account'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.private_highlights', 'update'),
+  'authenticated users cannot rewrite private highlight ownership or content'
+);
+
+select lives_ok(
+  $$
+    delete from public.private_highlights
+    where quote = 'owner A live insert'
+  $$,
+  'a signed-in user can delete their own highlight'
+);
+
+select is(
+  (select count(*)::integer from public.private_highlights),
+  1,
+  'creating and deleting an owned highlight leaves only the original owned row'
+);
+
+delete from public.private_highlights
+where quote = 'owner B fixture';
 
 select set_config(
   'request.jwt.claim.sub',
