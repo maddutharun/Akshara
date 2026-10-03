@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(25);
 
 select ok(
   not exists (
@@ -104,6 +104,11 @@ select ok(
 );
 
 select ok(
+  not has_function_privilege('anon', 'public.soft_delete_own_comment(uuid)', 'execute'),
+  'anonymous role cannot invoke comment deletion'
+);
+
+select ok(
   exists (
     select 1
     from pg_publication_tables
@@ -178,9 +183,18 @@ select ok(
 
 select ok(
   has_function_privilege('authenticated', 'public.resolve_comment_appeal(uuid,text,text)', 'execute')
-  and not has_function_privilege('anon', 'public.resolve_comment_appeal(uuid,text,text)', 'execute')
   and has_function_privilege('authenticated', 'public.resolve_comment_report(uuid,text,text)', 'execute'),
-  'appeal and report decisions use authenticated moderator-checked RPCs'
+  'authenticated role can invoke moderator-checked appeal and report RPCs'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.resolve_comment_appeal(uuid,text,text)', 'execute'),
+  'anonymous role cannot invoke appeal resolution'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.resolve_comment_report(uuid,text,text)', 'execute'),
+  'anonymous role cannot invoke report resolution'
 );
 
 select ok(
